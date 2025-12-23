@@ -88,7 +88,7 @@
             font-weight: bold; display: none; z-index: 100; box-shadow: var(--pink-glow);
         }
         #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-     
+    
         #mobile-controls {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 20; display: none;
@@ -120,7 +120,6 @@
             font-size: 2rem; text-align: center; padding: 20px; box-sizing: border-box;
         }
         @media (max-width: 1024px) {
-            #mobile-controls { display: block !important; }
             h1 { font-size: 2rem; }
             .menu-layout { flex-direction: column; padding-left: 0; }
             .side-panel { width: 80%; padding: 1rem; }
@@ -135,11 +134,19 @@
         <p>Please turn your device to landscape mode to play.</p>
     </div>
     <div id="ui-layer">
-        <div id="main-menu" class="screen">
+        <div id="control-choice" class="screen">
+            <h1>CREED SHOOTER</h1>
+            <div class="side-panel">
+                <p style="font-size:1.4rem; margin-bottom:30px;">Are you playing on Mobile or PC?</p>
+                <button onclick="chooseControls(true)">MOBILE</button>
+                <button onclick="chooseControls(false)" class="secondary">PC</button>
+            </div>
+        </div>
+
+        <div id="main-menu" class="screen hidden">
             <h1>CREED SHOOTER</h1>
             <div class="menu-layout">
                 <div class="side-panel">
-                    <button onclick="startQuickPlay()" style="background: linear-gradient(45deg, #ff007f, #ff5e00);">Quick Play</button>
                     <button class="secondary" onclick="initHost()">Create Match</button>
                     <button class="secondary" onclick="showScreen('lobby-join')">Join Player</button>
                     <div class="custom-color-picker">
@@ -191,7 +198,7 @@
             </div>
             <div id="crosshair"></div>
             <div id="countdown" class="hidden">3</div>
-         
+        
             <div id="mobile-controls">
                 <div id="touch-look"></div>
                 <div id="joystick-base"><div id="joystick-stick"></div></div>
@@ -220,28 +227,10 @@
         let joystickActive = false;
         let moveVec = { x: 0, y: 0 };
         let lastTouchX = 0, lastTouchY = 0;
-        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        let searching = false;
-        const QUICK_LOBBIES = 10;
-        let currentLobbyIndex = 0;
-        let afkTimer = null;
-        let lastActivityTime = Date.now();
-
-        function resetAFKTimer() {
-            lastActivityTime = Date.now();
-            if (afkTimer) clearTimeout(afkTimer);
-            if (gameState === 'lobby') {
-                afkTimer = setTimeout(() => {
-                    if (peer) peer.destroy();
-                    searching = false;
-                    showScreen('main-menu');
-                    document.getElementById('connected-count').innerText = "WAITING FOR PLAYER...";
-                }, 120000); // 2 minutes
-            }
-        }
+        let useMobileControls = false; // Will be set after user choice
 
         function checkOrientation() {
-            if (!isMobile) return;
+            if (!useMobileControls) return;
             const warning = document.getElementById('orientation-warning');
             if (window.innerHeight > window.innerWidth) {
                 warning.classList.remove('hidden');
@@ -253,32 +242,35 @@
                 document.getElementById('game-container').style.display = 'block';
             }
         }
-        window.onload = () => {
+
+        function chooseControls(isMobile) {
+            useMobileControls = isMobile;
+            if (useMobileControls) {
+                document.getElementById('mobile-controls').style.display = 'block';
+                initMobileControls();
+            }
+            showScreen('main-menu');
             checkOrientation();
+        }
+
+        window.onload = () => {
             window.addEventListener('orientationchange', checkOrientation);
             window.addEventListener('resize', checkOrientation);
             initGraphics(true);
-            showScreen('main-menu');
-            initMobileControls();
-
-            // Activity trackers for AFK
-            window.addEventListener('mousemove', resetAFKTimer);
-            window.addEventListener('mousedown', resetAFKTimer);
-            window.addEventListener('keydown', resetAFKTimer);
-            window.addEventListener('touchstart', resetAFKTimer);
-            window.addEventListener('touchmove', resetAFKTimer);
+            showScreen('control-choice');
         };
+
         function showScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
             document.getElementById(id).classList.remove('hidden');
             gameState = (id === 'main-menu') ? 'menu' : (id === 'lobby-wait' ? 'lobby' : gameState);
-            if (gameState === 'lobby') resetAFKTimer();
-            else if (afkTimer) { clearTimeout(afkTimer); afkTimer = null; }
         }
+
         function updateMyColor(val) {
             myColor = val;
             if (menuCharacter) menuCharacter.userData.body.material.color.set(val);
         }
+
         function createCharacter(color) {
             const group = new THREE.Group();
             const bodyGeo = new THREE.CylinderGeometry(0.7, 0.7, 2.5, 16);
@@ -310,6 +302,7 @@
             group.add(weapon);
             return group;
         }
+
         function createMeleeMesh() {
             const group = new THREE.Group();
             const bladeGeo = new THREE.BoxGeometry(0.1, 1.2, 0.2);
@@ -324,6 +317,7 @@
             group.add(handle);
             return group;
         }
+
         function initGraphics(isMenu = false) {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x050002);
@@ -368,32 +362,32 @@
             window.addEventListener('keydown', e => { if (gameState === 'playing') keys[e.code] = true; });
             window.addEventListener('keyup', e => keys[e.code] = false);
         }
+
         function initMobileControls() {
             const joyBase = document.getElementById('joystick-base');
             const joyStick = document.getElementById('joystick-stick');
             const touchLook = document.getElementById('touch-look');
             const fireBtn = document.getElementById('fire-btn');
-            
+           
             joyBase.addEventListener('touchstart', handleJoyTouchStart, {passive: false});
             joyBase.addEventListener('touchmove', handleJoyTouchMove, {passive: false});
             joyBase.addEventListener('touchend', handleJoyTouchEnd, {passive: false});
             joyBase.addEventListener('touchcancel', handleJoyTouchEnd, {passive: false});
-            
+           
             touchLook.addEventListener('touchstart', handleLookTouchStart, {passive: false});
             touchLook.addEventListener('touchmove', handleLookTouchMove, {passive: false});
             touchLook.addEventListener('touchend', handleLookTouchEnd, {passive: false});
             touchLook.addEventListener('touchcancel', handleLookTouchEnd, {passive: false});
-            
+           
             fireBtn.addEventListener('touchstart', handleFireTouch, {passive: false});
             fireBtn.addEventListener('touchend', handleFireTouchEnd, {passive: false});
         }
-        
+       
         function handleJoyTouchStart(e) {
             e.preventDefault();
             joystickActive = true;
-            resetAFKTimer();
         }
-        
+       
         function handleJoyTouchMove(e) {
             e.preventDefault();
             if (!joystickActive) return;
@@ -406,16 +400,16 @@
                 let dy = touch.clientY - centerY;
                 const dist = Math.min(60, Math.sqrt(dx*dx + dy*dy));
                 const angle = Math.atan2(dy, dx);
-             
+            
                 moveVec.x = (Math.cos(angle) * dist) / 60;
                 moveVec.y = (Math.sin(angle) * dist) / 60;
-             
+            
                 const joyStick = document.getElementById('joystick-stick');
                 joyStick.style.left = `calc(50% + ${Math.cos(angle) * dist}px)`;
                 joyStick.style.top = `calc(50% + ${Math.sin(angle) * dist}px)`;
             }
         }
-        
+       
         function handleJoyTouchEnd(e) {
             e.preventDefault();
             joystickActive = false;
@@ -423,15 +417,14 @@
             document.getElementById('joystick-stick').style.left = '50%';
             document.getElementById('joystick-stick').style.top = '50%';
         }
-        
+       
         function handleLookTouchStart(e) {
             e.preventDefault();
             const touch = e.changedTouches[0];
             lastTouchX = touch.clientX;
             lastTouchY = touch.clientY;
-            resetAFKTimer();
         }
-        
+       
         function handleLookTouchMove(e) {
             e.preventDefault();
             const touch = e.changedTouches[0];
@@ -442,87 +435,23 @@
             lastTouchX = touch.clientX;
             lastTouchY = touch.clientY;
         }
-        
+       
         function handleLookTouchEnd(e) {
             e.preventDefault();
         }
-        
+       
         function handleFireTouch(e) {
             e.preventDefault();
             if (gameState === 'playing' && canMove) fire();
             if (audioContext && audioContext.state === 'suspended') audioContext.resume();
             if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-            resetAFKTimer();
         }
-        
+       
         function handleFireTouchEnd(e) {
             e.preventDefault();
         }
-        
-        function startQuickPlay() {
-            if (searching) return;
-            searching = true;
-            startMusic();
-            document.getElementById('lobby-header').innerText = "SEARCHING...";
-            document.getElementById('id-container').classList.add('hidden');
-            showScreen('lobby-wait');
-            document.getElementById('connected-count').innerText = "SEARCHING FOR OPPONENT...";
-            if (peer) peer.destroy();
-            peer = new Peer();
-            currentLobbyIndex = 0;
-            peer.on('open', id => {
-                myId = id;
-                tryNextLobby();
-            });
-            peer.on('connection', conn => {
-                if (connections.length === 0) {
-                    connections = [conn];
-                    isHost = true;
-                    myTeam = 'a';
-                    conn.on('open', () => {
-                        document.getElementById('connected-count').innerText = "OPPONENT FOUND!";
-                        setTimeout(hostStartGame, 1500);
-                    });
-                    conn.on('data', data => handleIncomingData(data, conn));
-                } else {
-                    conn.close();
-                }
-            });
-        }
-
-        function tryNextLobby() {
-            if (!searching) return;
-            const lobbyId = 'CREED-QUICK-' + currentLobbyIndex;
-            const conn = peer.connect(lobbyId);
-            let connected = false;
-            conn.on('open', () => {
-                connected = true;
-                connections = [conn];
-                isHost = false;
-                myTeam = 'b';
-                document.getElementById('connected-count').innerText = "OPPONENT FOUND!";
-                searching = false;
-            });
-            conn.on('data', data => handleIncomingData(data, conn));
-            conn.on('error', () => {});
-            conn.on('close', () => {
-                if (!connected && searching) {
-                    currentLobbyIndex = (currentLobbyIndex + 1) % QUICK_LOBBIES;
-                    document.getElementById('connected-count').innerText = "SEARCHING LOBBY " + currentLobbyIndex + "...";
-                    setTimeout(tryNextLobby, 800);
-                }
-            });
-            setTimeout(() => {
-                if (!connected && searching) {
-                    currentLobbyIndex = (currentLobbyIndex + 1) % QUICK_LOBBIES;
-                    document.getElementById('connected-count').innerText = "SEARCHING LOBBY " + currentLobbyIndex + "...";
-                    tryNextLobby();
-                }
-            }, 1500);
-        }
 
         function initHost() {
-            searching = false;
             startMusic();
             isHost = true; myTeam = 'a';
             document.getElementById('id-container').classList.remove('hidden');
@@ -536,8 +465,8 @@
                 document.getElementById('start-btn').classList.remove('hidden');
             });
         }
+
         function joinMatch() {
-            searching = false;
             startMusic();
             const id = document.getElementById('join-id').value.toUpperCase().trim();
             if (!id) return;
@@ -552,6 +481,7 @@
                 document.getElementById('display-id').innerText = id;
             });
         }
+
         function handleIncomingData(data, conn) {
             if (data.type === 'start') setupMatch(data);
             if (data.type === 'update') {
@@ -565,14 +495,15 @@
             if (data.type === 'shot') { renderLaser(data.from, data.to, data.color); playSound(laserSound); }
             if (data.type === 'hit') { playSound(deathSound); handleScore(data.killerTeam); }
         }
+
         function vote(theme) {
             myVote = theme;
             document.getElementById('vote-dark').classList.remove('selected');
             document.getElementById('vote-light').classList.remove('selected');
             document.getElementById('vote-' + theme).classList.add('selected');
-            resetAFKTimer();
             if (!isHost && connections[0]) connections[0].send({ type: 'vote', theme });
         }
+
         function hostStartGame() {
             if(!connections[0]) return;
             const matchData = {
@@ -582,9 +513,8 @@
             connections[0].send(matchData);
             setupMatch(matchData);
         }
+
         function setupMatch(data) {
-            searching = false;
-            if (afkTimer) clearTimeout(afkTimer);
             gameState = 'countdown';
             mapTheme = data.theme;
             showScreen('hud');
@@ -624,6 +554,7 @@
             });
             startRound();
         }
+
         function startRound() {
             canMove = false;
             const spawnX = myTeam === 'a' ? -30 : 30;
@@ -639,6 +570,7 @@
                 else { el.classList.add('hidden'); clearInterval(timer); }
             }, 1000);
         }
+
         function fire() {
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0,0), camera);
@@ -661,13 +593,16 @@
                 }
             }
         }
+
         function renderLaser(from, to, color) {
             const mat = new THREE.LineBasicMaterial({ color: varColorToHex(color) });
             const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(from.x, from.y, from.z), new THREE.Vector3(to.x, to.y, to.z)]);
             const line = new THREE.Line(geo, mat);
             scene.add(line); setTimeout(() => scene.remove(line), 50);
         }
+
         function varColorToHex(c) { return parseInt(c.replace('#', '0x')); }
+
         function handleScore(t) {
             scores[t]++;
             document.getElementById('score-a').innerText = scores.a;
@@ -679,6 +614,7 @@
                 showScreen('result-screen');
             } else startRound();
         }
+
         function checkCollision(pos) {
             if (Math.abs(pos.x) > ARENA_SIZE || Math.abs(pos.z) > ARENA_SIZE) return true;
             for (let obj of collidables) {
@@ -690,6 +626,7 @@
             }
             return false;
         }
+
         function animate() {
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
@@ -702,7 +639,7 @@
                 const move = new THREE.Vector3();
                 if (keys.KeyW) move.z -= 1; if (keys.KeyS) move.z += 1;
                 if (keys.KeyA) move.x -= 1; if (keys.KeyD) move.x += 1;
-                if (joystickActive) {
+                if (useMobileControls && joystickActive) {
                     move.z += moveVec.y;
                     move.x += moveVec.x;
                 }
@@ -735,6 +672,7 @@
             }
             if (renderer && scene && camera) renderer.render(scene, camera);
         }
+
         function copyId() {
             const t = document.getElementById('display-id').innerText;
             const el = document.createElement('textarea'); el.value = t; document.body.appendChild(el);
@@ -742,6 +680,7 @@
             const toast = document.getElementById('toast'); toast.style.display = 'block';
             setTimeout(() => toast.style.display = 'none', 2000);
         }
+
         function startMusic() { bgMusic.play().catch(() => {}); }
         function playSound(sound) { const clone = sound.cloneNode(); clone.volume = sound.volume; clone.play().catch(() => {}); }
     </script>
